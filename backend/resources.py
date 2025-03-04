@@ -1,10 +1,12 @@
 from flask import request
+from flask_jwt_extended import jwt_required as auth_required
 from flask_restful import Resource
 from werkzeug.security import generate_password_hash
 from backend.models import db, User, Service, ServiceRequest, ServiceProfessional, Review, JobLog, Customer
 
 # Register API
 class Register(Resource):
+    @auth_required('token')
     def post(self):
         data = request.get_json()
         
@@ -26,6 +28,7 @@ class Register(Resource):
         return {"message": "User registered successfully"}, 201
 
 class UserList(Resource):
+    @auth_required('token')
     def get(self):
         users = User.query.all()
         return [{"id": user.id, "username": user.username, "email": user.email, "role": user.role} for user in users]

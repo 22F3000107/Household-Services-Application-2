@@ -15,19 +15,54 @@ export default {
           <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav">
+          <ul class="navbar-nav me-auto">
             <li class="nav-item">
-              <a class="nav-link" href="/">Home</a>
+              <router-link class="nav-link" to="/">Home</router-link>
             </li>
-            <li class="nav-item">
-              <a class="nav-link" href="/login">Login</a>
+            <li v-if="!isLoggedIn" class="nav-item">
+              <router-link class="nav-link" to="/login">Login</router-link>
             </li>
-            <li class="nav-item">
-              <a class="nav-link" href="/register">Register</a>
+            <li v-if="!isLoggedIn" class="nav-item">
+              <router-link class="nav-link" to="/register">Register</router-link>
+            </li>
+            <li v-if="isAdmin" class="nav-item">
+              <router-link class="nav-link" to="/admin-dashboard">Admin Dashboard</router-link>
+            </li>
+            <li v-if="isCustomer" class="nav-item">
+              <router-link class="nav-link" to="/customer-dashboard">Customer Dashboard</router-link>
+            </li>
+            <li v-if="isProfessional" class="nav-item">
+              <router-link class="nav-link" to="/professional-dashboard">Professional Dashboard</router-link>
             </li>
           </ul>
+          <button v-if="isLoggedIn" @click="logout" class="btn btn-danger">Logout</button>
         </div>
       </div>
     </nav>
   `,
+  computed: {
+    isLoggedIn() {
+      return !!localStorage.getItem("token");
+    },
+    userRole() {
+      return localStorage.getItem("role");
+    },
+    isAdmin() {
+      return this.userRole === "admin";
+    },
+    isCustomer() {
+      return this.userRole === "customer";
+    },
+    isProfessional() {
+      return this.userRole === "professional";
+    }
+  },
+  methods: {
+    logout() {
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      alert("Logged out successfully!");
+      this.$router.push("/login"); // Redirect to login
+    }
+  }
 };
