@@ -8,17 +8,22 @@ export default {
                 <label for="serviceName">Service Name:</label>
                 <input type="text" id="serviceName" v-model="serviceName" class="form-control" required />
             </div>
+            
+            <div class="form-group">
+                <label for="description">Description:</label>
+                <textarea id="description" v-model="description" class="form-control" rows="3"></textarea>
+            </div>
 
             <div class="form-group">
                 <label for="basePrice">Base Price:</label>
-                <input type="number" id="basePrice" v-model.number="basePrice" class="form-control" required min="1" />
+                <input type="number" id="basePrice" v-model.number="basePrice" class="form-control" />
             </div>
 
             <div class="form-group">
                 <label for="duration">Estimated Time (in hours):</label>
-                <input type="number" id="duration" v-model.number="duration" class="form-control" required min="1" />
+                <input type="number" id="duration" v-model.number="duration" class="form-control"  />
             </div>
-
+            
             <button type="submit" class="btn btn-success mt-3" :disabled="loading">
                 {{ loading ? 'Adding...' : 'Add Service' }}
             </button>
@@ -31,6 +36,7 @@ export default {
     data() {
         return {
             serviceName: "",
+            description: "",
             basePrice: null,
             duration: null,
             loading: false,
@@ -57,8 +63,9 @@ export default {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         name: serviceNameTrimmed,
+                        description: this.description,
                         base_price: this.basePrice,
-                        estimated_time: this.duration
+                        time_required: this.duration
                     })
                 });
 
@@ -69,6 +76,7 @@ export default {
                 
                 // Reset form fields
                 this.serviceName = "";
+                this.description = "";
                 this.basePrice = null;
                 this.duration = null;
 

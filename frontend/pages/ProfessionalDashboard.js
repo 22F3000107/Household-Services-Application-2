@@ -1,4 +1,4 @@
-import store from "../store.js"; 
+import store from "../utils/store.js";
 
 export default {
     template: `
@@ -13,8 +13,8 @@ export default {
             <thead class="thead-dark">
                 <tr>
                     <th>ID</th>
-                    <th>Service</th>
-                    <th>Customer</th>
+                    <th>Service Name</th>
+                    <th>Customer Name</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
@@ -23,16 +23,27 @@ export default {
                 <tr v-for="job in jobs" :key="job.id">
                     <td>{{ job.id }}</td>
                     <td>{{ job.service_name }}</td>
-                    <td>{{ job.customer_name }}</td>
+                    <td>{{ job.customer_name || "Unknown" }}</td>
                     <td>{{ job.status }}</td>
                     <td>
-                        <button class="btn btn-success btn-sm" @click="updateStatus(job.id, 'Completed')">Mark Completed</button>
+                        <!-- Accept & Reject for 'requested' services -->
+                        <button @click="updateStatus(job.id, 'accept')" v-if="job.status === 'requested'" class="btn btn-success btn-sm">
+                            Accept
+                        </button>
+                        <button @click="updateStatus(job.id, 'reject')" v-if="job.status === 'requested'" class="btn btn-danger btn-sm">
+                            Reject
+                        </button>
+
+                        <!-- Mark as Completed for 'assigned' services -->
+                        <button @click="updateStatus(job.id, 'complete')" v-if="job.status === 'assigned'" class="btn btn-primary btn-sm">
+                            Mark as Completed
+                        </button>
                     </td>
                 </tr>
             </tbody>
         </table>
 
-        <p v-if="jobs.length === 0 && !loading" class="text-muted">No assigned jobs.</p>
+        <div v-if="!loading && jobs.length === 0" class="text-muted">No service requests found.</div>
     </div>
     `,
     data() {
@@ -44,14 +55,26 @@ export default {
     },
     methods: {
         async fetchJobs() {
+            console.log("Fetching Jobs...");
+
+            if (!store.state.token) {
+                this.error = "Not authenticated. Please log in.";
+                return;
+            }
+
             this.loading = true;
             this.error = null;
+
             try {
-                const response = await fetch(`/api/professional/jobs`, {
-                    headers: { Authorization: `Bearer ${store.state.token}` }
+                const response = await fetch("/api/service_requests/professional", {
+                    headers: { 
+                        Authorization: `Bearer ${store.state.token}`,
+                        "Content-Type": "application/json"
+                    }
                 });
 
                 if (!response.ok) throw new Error("Failed to fetch jobs");
+
                 this.jobs = await response.json();
             } catch (err) {
                 this.error = err.message;
@@ -59,27 +82,40 @@ export default {
                 this.loading = false;
             }
         },
-        async updateStatus(jobId, status) {
+
+        async updateStatus(jobId, action) {
+            if (!store.state.token) {
+                alert("Authentication required. Please log in.");
+                return;
+            }
+
             try {
-                const response = await fetch(`/api/professional/jobs/${jobId}`, {
+                const response = await fetch(`/api/service_requests/${jobId}/${action}`, {
                     method: "PUT",
                     headers: {
                         "Content-Type": "application/json",
                         Authorization: `Bearer ${store.state.token}`
-                    },
-                    body: JSON.stringify({ status })
+                    }
                 });
 
-                if (!response.ok) throw new Error("Failed to update status");
+                if (!response.ok) {
+                    const errorMsg = await response.text();
+                    throw new Error(errorMsg || "Failed to update status");
+                }
 
-                this.jobs = this.jobs.map(job => 
-                    job.id === jobId ? { ...job, status } : job
-                );
+                // Refresh job list after action
+                await this.fetchJobs(); 
 
-                alert("Job status updated.");
+                alert(`Job ${this.getActionLabel(action)} successfully.`);
             } catch (err) {
-                alert(err.message);
+                alert(`Error: ${err.message}`);
             }
+        },
+
+        getActionLabel(action) {
+            return action === "accept" ? "accepted" :
+                   action === "reject" ? "rejected" :
+                   action === "complete" ? "marked as completed" : "updated";
         }
     },
     mounted() {

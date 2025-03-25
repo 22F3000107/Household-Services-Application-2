@@ -16,7 +16,7 @@ export default {
             <tbody>
                 <tr v-for="user in users" :key="user.id">
                     <td>{{ user.id }}</td>
-                    <td>{{ user.name }}</td>
+                    <td>{{ user.username }}</td>
                     <td>{{ user.role }}</td>
                     <td>
                         <button class="btn btn-warning btn-sm" @click="blockUser(user.id)">Block</button>

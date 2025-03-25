@@ -1,5 +1,5 @@
 from flask import request
-from flask_jwt_extended import jwt_required as auth_required
+from flask_jwt_extended import jwt_required as auth_required, current_user
 from flask_restful import Resource
 from werkzeug.security import generate_password_hash
 from backend.models import db, User, Service, ServiceRequest, ServiceProfessional, Review, JobLog, Customer
@@ -12,6 +12,10 @@ class Register(Resource):
         
         if not data.get("username") or not data.get("email") or not data.get("password") or not data.get("role"):
             return {"error": "All fields are required"}, 400
+        # 🔍 Check if the email already exists
+        existing_user = User.query.filter_by(email=data["email"]).first()
+        if existing_user:
+            return {"error": "Email is already registered. Please use a different email."}, 400
 
         hashed_password = generate_password_hash(data["password"])
 
@@ -25,6 +29,29 @@ class Register(Resource):
         db.session.add(new_user)
         db.session.commit()
         
+        # If the role is service_professional, add to ServiceProfessional table
+        if data["role"] == "customer":
+            customer = Customer(
+                user_id=new_user.id,
+                address=data.get("address", ""),  
+                pin_code=data.get("pin_code", "")  
+            )
+            db.session.add(customer)
+        
+        
+        elif data["role"] == "service_professional":
+            service_professional = ServiceProfessional(
+                user_id=new_user.id,
+                service_type=data.get("service_type", ""),  
+                experience=data.get("experience", 0),
+                profile_verified=False  
+            )
+            db.session.add(service_professional)
+        
+        
+
+        db.session.commit()
+
         return {"message": "User registered successfully"}, 201
 
 class UserList(Resource):
@@ -56,7 +83,13 @@ class DeleteUser(Resource):
 class ServiceList(Resource):
     def get(self):
         services = Service.query.all()
-        return [{"id": service.id, "name": service.name, "base_price": service.base_price} for service in services]
+        return [{
+            "id": service.id,
+            "name": service.name,
+            "description": service.description,  # 🔍 Include description
+            "base_price": service.base_price,
+            "time_required": service.time_required  # 🔍 Include time_required
+        } for service in services]
 
     def post(self):
         data = request.get_json()
@@ -196,37 +229,81 @@ class ServiceRequestResource(Resource):
         return {"message": "Service request deleted successfully"}, 200
 
 
-# class ServiceProfessionalList(Resource):
-
-class ServiceProfessionalList(Resource):
+class ServiceRequestList(Resource):
+    @auth_required('token')
     def get(self):
-        """Get all service professionals"""
-        professionals = ServiceProfessional.query.all()
+        """Get all service requests assigned to a service professional OR still in 'Requested' status"""
+        if current_user.role != "service_professional":
+            return {"error": "Unauthorized"}, 403
+
+        # Fetch both assigned and unassigned jobs with "Requested" status
+        available_requests = ServiceRequest.query.filter(
+            (ServiceRequest.professional_id == current_user.id) |  # Assigned jobs
+            ((ServiceRequest.status == "Requested") & (ServiceRequest.professional_id.is_(None)))  # Unassigned Requested jobs
+        ).all()
+
         return [{
-            "id": prof.id,
-            "user_id": prof.user_id,
-            "service_type": prof.service_type,
-            "experience": prof.experience,
-            "profile_verified": prof.profile_verified
-        } for prof in professionals], 200
+            "id": req.id,
+            "service_id": req.service_id,
+            "customer_id": req.customer_id,
+            "professional_id": req.professional_id,
+            "date_of_request": req.date_of_request.strftime("%Y-%m-%d"),
+            "date_of_completion": req.date_of_completion.strftime("%Y-%m-%d") if req.date_of_completion else None,
+            "status": req.status,
+            "remarks": req.remarks
+        } for req in available_requests], 200
 
-    def post(self):
-        """Create a new service professional"""
+
+class ServiceRequestAction(Resource):
+    @auth_required('token')
+    def put(self, request_id):
+        """Accept or reject a service request"""
+        if current_user.role != "service_professional":
+            return {"error": "Unauthorized"}, 403
+
         data = request.get_json()
-        if not data.get("user_id") or not data.get("service_type"):
-            return {"error": "User ID and Service Type are required"}, 400
+        action = data.get("action")  # Accept or Reject
 
-        new_professional = ServiceProfessional(
-            user_id=data["user_id"],
-            service_type=data["service_type"],
-            experience=data.get("experience", 0),
-            profile_verified=data.get("profile_verified", False)
-        )
+        service_request = ServiceRequest.query.get(request_id)
+        if not service_request:
+            return {"error": "Service request not found"}, 404
 
-        db.session.add(new_professional)
+        if service_request.status != "Requested":
+            return {"error": "Service request is already assigned or closed"}, 400
+
+        if action == "accept":
+            service_request.status = "Assigned"
+            service_request.professional_id = current_user.id
+        elif action == "reject":
+            service_request.status = "Rejected"
+        else:
+            return {"error": "Invalid action"}, 400
+
         db.session.commit()
-        return {"message": "Service professional added successfully"}, 201
+        return {"message": f"Service request {action}ed successfully"}, 200
 
+class CloseServiceRequest(Resource):
+    @auth_required('token')
+    def put(self, request_id):
+        """Mark a service request as closed"""
+        if current_user.role != "service_professional":
+            return {"error": "Unauthorized"}, 403
+
+        service_request = ServiceRequest.query.get(request_id)
+        if not service_request:
+            return {"error": "Service request not found"}, 404
+
+        if service_request.professional_id != current_user.id:
+            return {"error": "You can only close your assigned requests"}, 403
+
+        if service_request.status != "Assigned":
+            return {"error": "Only assigned requests can be closed"}, 400
+
+        service_request.status = "Closed"
+        service_request.date_of_completion = db.func.current_date()
+
+        db.session.commit()
+        return {"message": "Service request closed successfully"}, 200
 
 class ServiceProfessionalResource(Resource):
     def get(self, professional_id):
@@ -405,3 +482,87 @@ class JobLogResource(Resource):
         db.session.delete(log)
         db.session.commit()
         return {"message": "Job log deleted successfully"}, 200
+
+class AcceptServiceRequest(Resource):
+    @auth_required("token")
+    def post(self, request_id):
+        try:
+            user = current_user  # Get the logged-in user
+            professional = ServiceProfessional.query.filter_by(user_id=user.id).first()
+
+            if not professional:
+                return {"error": "You are not a registered service professional"}, 403
+
+            service_request = ServiceRequest.query.get(request_id)
+            if not service_request:
+                return {"error": "Service request not found"}, 404
+
+            if service_request.status != "requested":
+                return {"error": "Service request is already assigned or closed"}, 400
+
+            # Assign the professional and update status
+            service_request.update_status("assigned", professional.id)
+
+            return {"message": "Service request accepted successfully"}, 200
+
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error: {str(e)}")
+            return {"error": "An internal server error occurred"}, 500
+
+
+class RejectServiceRequest(Resource):
+    @auth_required("token")
+    def post(self, request_id):
+        try:
+            user = current_user
+            professional = ServiceProfessional.query.filter_by(user_id=user.id).first()
+
+            if not professional:
+                return {"error": "You are not a registered service professional"}, 403
+
+            service_request = ServiceRequest.query.get(request_id)
+            if not service_request:
+                return {"error": "Service request not found"}, 404
+
+            if service_request.status != "requested":
+                return {"error": "Service request is already assigned or closed"}, 400
+
+            # Update status to rejected
+            service_request.update_status("rejected", remarks="Service professional declined")
+
+            return {"message": "Service request rejected successfully"}, 200
+
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error: {str(e)}")
+            return {"error": "An internal server error occurred"}, 500
+
+class CompleteServiceRequest(Resource):
+    @auth_required("token")
+    def post(self, request_id):
+        try:
+            user = current_user
+            professional = ServiceProfessional.query.filter_by(user_id=user.id).first()
+
+            if not professional:
+                return {"error": "You are not a registered service professional"}, 403
+
+            service_request = ServiceRequest.query.get(request_id)
+            if not service_request:
+                return {"error": "Service request not found"}, 404
+
+            if service_request.professional_id != professional.id:
+                return {"error": "You are not assigned to this service request"}, 403
+
+            if service_request.status != "assigned":
+                return {"error": "Service request is not assigned or already closed"}, 400
+
+            service_request.update_status("closed", remarks="Service completed")
+
+            return {"message": "Service request marked as completed"}, 200
+
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error: {str(e)}")
+            return {"error": "An internal server error occurred"}, 500

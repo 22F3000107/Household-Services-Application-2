@@ -21,7 +21,7 @@ class User(db.Model):
         return check_password_hash(self.password, password)
     # Relationships
     customer = db.relationship('Customer', backref='user', uselist=False)
-    professional = db.relationship('ServiceProfessional', backref='user', uselist=False)
+    service_professional = db.relationship('ServiceProfessional', backref='user', uselist=False)
 
 
 # Customer Model
@@ -73,9 +73,10 @@ class ServiceRequest(db.Model):
     status = db.Column(db.String(20), default='Requested')  # Requested, Assigned, Closed
     remarks = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
-    updated_at = db.Column(db.DateTime, onupdate=db.func.current_timestamp())
+    
 
-
+    service = db.relationship('Service', backref='requests',lazy=True)
+    customer = db.relationship('Customer', backref='requests',lazy=True)
 # Review Model
 class Review(db.Model):
     __tablename__ = 'reviews'

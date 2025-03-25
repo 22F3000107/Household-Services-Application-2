@@ -6,13 +6,16 @@ from dotenv import load_dotenv
 import os
 from werkzeug.security import generate_password_hash
 from backend.models import db,User,Service,ServiceRequest,Customer,ServiceProfessional,Review,JobLog
-from backend.resources import Register, UserList, UserResource, DeleteUser,ServiceList, ServiceResource, ServiceRequestList, ServiceRequestResource,ServiceProfessionalList, ServiceProfessionalResource,ReviewList, ReviewResource, JobLogList, JobLogResource
-
+from backend.resources import Register, UserList, UserResource, DeleteUser,ServiceList, ServiceResource, ServiceRequestList, ServiceRequestResource,ServiceRequestAction,CloseServiceRequest, ServiceProfessionalResource,ReviewList, ReviewResource, JobLogList, JobLogResource, AcceptServiceRequest, RejectServiceRequest, CompleteServiceRequest
+from backend.tasks import create_celery 
 
 def create_app():
 # Initialize Flask App
     app = Flask(__name__, template_folder='frontend', static_folder='frontend', static_url_path='/static')
-    CORS(app)
+    CORS(app,resources={r"/api/*": {
+        "origins": "*",
+        "allow_headers": ["Authorization", "Content-Type"]
+    }})
 
 # Load environment variables
     load_dotenv()
@@ -23,11 +26,25 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = os.getenv('SQLALCHEMY_TRACK_MODIFICATIONS')
 
-# JWT Initialization
-    jwt = JWTManager(app)
+# Google Chat Webhook & Mail Sender Configuration
+    app.config['GOOGLE_CHAT_WEBHOOK_URL'] = os.getenv("GOOGLE_CHAT_WEBHOOK_URL", "https://chat.googleapis.com/v1/spaces/...")
+    app.config['MAIL_SENDER'] = os.getenv("MAIL_SENDER", "no-reply@yourdomain.com")
+
+
+# Celery Configuration
+    app.config['CELERY_BROKER_URL'] = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+    app.config['CELERY_RESULT_BACKEND'] = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 
 # Database Initialization
     db.init_app(app)
+
+
+# Initialize Celery
+    celery = create_celery(app)
+
+# JWT Initialization
+    jwt = JWTManager(app)
+
 
 # Initialize Flask-RESTful API
     api = Api(app)  
@@ -40,14 +57,18 @@ def create_app():
     api.add_resource(DeleteUser, '/api/users/<int:user_id>/delete')
     api.add_resource(ServiceList, '/api/services')
     api.add_resource(ServiceResource, '/api/services/<int:service_id>')
-    api.add_resource(ServiceRequestList, '/api/service_requests')
     api.add_resource(ServiceRequestResource, '/api/service_requests/<int:request_id>')
-    api.add_resource(ServiceProfessionalList, '/api/service_professionals')
+    api.add_resource(ServiceRequestList, '/api/service_requests')
+    api.add_resource(ServiceRequestAction, "/api/service_requests/<int:request_id>/action")
+    api.add_resource(CloseServiceRequest, "/api/service_requests/<int:request_id>/close")
     api.add_resource(ServiceProfessionalResource, '/api/service_professionals/<int:professional_id>')
     api.add_resource(ReviewList, '/api/reviews')
     api.add_resource(ReviewResource, '/api/reviews/<int:review_id>')
     api.add_resource(JobLogList, '/api/job_logs')
     api.add_resource(JobLogResource, '/api/job_logs/<int:log_id>')
+    api.add_resource(AcceptServiceRequest, "/api/service_request/<int:request_id>/accept")
+    api.add_resource(RejectServiceRequest, "/api/service_request/<int:request_id>/reject")
+    api.add_resource(CompleteServiceRequest, "/api/service_request/<int:request_id>/complete")
 
 # Register Blueprints
     from backend.controllers import main_blueprint
@@ -60,11 +81,11 @@ def create_app():
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
-    return app
+    return app, celery
 
 
 if __name__ == '__main__':
-    app = create_app()
+    app, celery = create_app()
 
     with app.app_context():
         # Create all tables
@@ -77,7 +98,7 @@ if __name__ == '__main__':
             admin = User(
                 username='admin',
                 password=hashed_password,
-                role='Admin',
+                role='admin',
                 email='Admin123@gmail.com',
                 is_admin=True
             )
@@ -85,4 +106,7 @@ if __name__ == '__main__':
             db.session.commit()
             print("Admin user created.")
 
+        
     app.run(debug=True)
+
+    
