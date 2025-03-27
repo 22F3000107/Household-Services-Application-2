@@ -3,9 +3,9 @@ import store from "../utils/store.js";
 
 export default {
     template: `
-    <div class="container mt-4">
-        <h2>Customer Dashboard</h2>
-        <p>Manage your booked services.</p>
+    <div class="container mt-5 pt-4">
+        <h2 class="text-dark">Customer Dashboard</h2>
+        <p class="text-muted">Manage your booked services.</p>
 
         <a href="/book-service" class="btn btn-success mb-3">Book a New Service</a>
 
@@ -246,7 +246,7 @@ export default {
             if (!confirm("Are you sure you want to book this service?")) return;
 
             try {
-                const response = await fetch(`/api/customer/services/book`, {
+                const response = await fetch(`/api/book_service`, {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${store.getters.authToken}`,

@@ -39,7 +39,7 @@ def send_daily_reminder():
         for professional in professionals:
             pending_requests = ServiceRequest.query.filter(
                 ServiceRequest.professional_id == professional.id,
-                ServiceRequest.status.in_(["Requested", "Assigned"])
+                ServiceRequest.status.in_(["requested", "assigned"])
             ).all()
 
             if pending_requests:

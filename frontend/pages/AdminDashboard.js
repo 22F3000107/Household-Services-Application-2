@@ -2,9 +2,9 @@ import store from "../utils/store.js";
 
 export default {
     template: `
-    <div class="container mt-4">
-        <h2>Admin Dashboard</h2>
-        <p>Welcome, Admin! Manage your platform here.</p>
+    <div class="container mt-5 pt-4">
+        <h2 class="text-dark">Admin Dashboard</h2>
+        <p class="text-muted">Welcome, Admin! Manage your platform here.</p>
 
         <div class="row">
             <div class="col-md-4">

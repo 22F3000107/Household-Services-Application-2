@@ -613,9 +613,8 @@ def get_professional_service_requests():
     if not professional or not professional.profile_verified:
         return jsonify({"error": "You are not verified yet"}), 403
 
-    service_requests = ServiceRequest.query.filter(
-        (ServiceRequest.professional_id == professional.id) | (ServiceRequest.status == "requested")
-    ).all()
+    service_requests = ServiceRequest.query.filter_by(professional_id=professional.id).all()
+
     
     print(f"Professional ID: {professional.id}")  
     print(f"Total Jobs (Requested & Assigned): {len(service_requests)}")
@@ -623,7 +622,7 @@ def get_professional_service_requests():
     return jsonify([
         {
             "id": req.id,
-            "service_name": req.service.name,  
+            "service_name": req.service.name if req.service else "Unknown",  
             "customer_name": req.customer.user.username if req.customer else "Unknown", 
             "customer_address": req.customer.address if req.customer else "Unknown",
             "status": req.status,
@@ -632,6 +631,7 @@ def get_professional_service_requests():
 
         } for req in service_requests
     ])
+
 
 @main_blueprint.route('/api/service_requests/<int:request_id>/accept', methods=['PUT'])
 @jwt_required()
@@ -646,15 +646,18 @@ def accept_service_request(request_id):
     if not service_request:
         return jsonify({"error": "Service request not found"}), 404
 
-    if service_request.professional_id is not None:
-        return jsonify({"error": "Service request is already assigned"}), 400
+    # Ensure request is assigned to this professional and is still pending acceptance
+    if service_request.professional_id != professional.id:
+        return jsonify({"error": "This request is not assigned to you"}), 403
 
-    service_request.professional_id = professional.id
-    service_request.status = "assigned"
+    if service_request.status != "assigned":
+        return jsonify({"error": "This request is not awaiting acceptance"}), 400
+
+    # Update status to "accepted"
+    service_request.status = "accepted"
     db.session.commit()
 
-    return jsonify({"message": "Service request accepted", "new_status": "assigned"})
-
+    return jsonify({"message": "Service request accepted", "new_status": "accepted"})
 
 @main_blueprint.route('/api/service_requests/<int:request_id>/reject', methods=['PUT'])
 @jwt_required()
@@ -669,38 +672,63 @@ def reject_service_request(request_id):
     if not service_request:
         return jsonify({"error": "Service request not found"}), 404
 
-    if service_request.professional_id is not None:
-        return jsonify({"error": "Cannot reject an already assigned service request"}), 400
+    # Ensure request is assigned to this professional
+    if service_request.professional_id != professional.id:
+        return jsonify({"error": "This request is not assigned to you"}), 403
 
+    if service_request.status != "assigned":
+        return jsonify({"error": "This request is not awaiting acceptance"}), 400
+
+    # Update status to "rejected" and remove professional assignment
     service_request.status = "rejected"
+    service_request.professional_id = None  # Admin can reassign it
     db.session.commit()
 
     return jsonify({"message": "Service request rejected", "new_status": "rejected"})
 
 
+
 @main_blueprint.route('/api/service_requests/<int:request_id>/complete', methods=['PUT'])
 @jwt_required()
 def complete_service_request(request_id):
+    
     user_id = get_jwt_identity()
-    professional = ServiceProfessional.query.filter_by(user_id=user_id).first()
+    
 
-    if not professional or not professional.profile_verified:
+    professional = ServiceProfessional.query.filter_by(user_id=user_id).first()
+    if not professional:
+        
         return jsonify({"error": "You are not verified yet"}), 403
 
     service_request = ServiceRequest.query.get(request_id)
     if not service_request:
+       
         return jsonify({"error": "Service request not found"}), 404
 
     if service_request.professional_id != professional.id:
+        
         return jsonify({"error": "You are not assigned to this request"}), 403
 
-    if service_request.status != "assigned":
-        return jsonify({"error": "Only assigned requests can be marked as completed"}), 400
+    if service_request.status != "accepted":
+        print(f" Request status is {service_request.status}, not 'accepted'")
+        return jsonify({"error": "Only accepted requests can be marked as completed"}), 400
 
+    print("Request received:", request.get_data())  # Log full request data
+
+    # Check JSON body
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Missing request body"}), 400
+
+    remarks = data.get("remarks", "")
+
+    # Update service request
     service_request.status = "closed"
+    service_request.remarks = remarks
     service_request.date_of_completion = datetime.utcnow()
     db.session.commit()
 
+    print("✅ Service request successfully marked as completed")
     return jsonify({"message": "Service request marked as completed", "new_status": "closed"})
 
 # ---------------- SEARCH MANAGEMENT ----------------

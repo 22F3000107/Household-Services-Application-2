@@ -8,9 +8,7 @@ from backend.models import db
 from backend.resources import (
     Register, UserList, UserResource, DeleteUser,
     ServiceList, ServiceResource, ServiceRequestList,
-    ServiceRequestResource, ServiceRequestAction, CloseServiceRequest,
-    ServiceProfessionalResource, ReviewList, ReviewResource,
-    AcceptServiceRequest, RejectServiceRequest, CompleteServiceRequest
+    ServiceRequestResource    
 )
 from backend.celery_app import make_celery
 
@@ -73,15 +71,9 @@ def create_app():
     api.add_resource(ServiceResource, '/api/services/<int:service_id>')
     api.add_resource(ServiceRequestResource, '/api/service_requests/<int:request_id>')
     api.add_resource(ServiceRequestList, '/api/service_requests')
-    api.add_resource(ServiceRequestAction, "/api/service_requests/<int:request_id>/action")
-    api.add_resource(CloseServiceRequest, "/api/service_requests/<int:request_id>/close")
-    api.add_resource(ServiceProfessionalResource, '/api/service_professionals/<int:professional_id>')
-    api.add_resource(ReviewList, '/api/reviews')
-    api.add_resource(ReviewResource, '/api/reviews/<int:review_id>')
-    api.add_resource(AcceptServiceRequest, "/api/service_request/<int:request_id>/accept")
-    api.add_resource(RejectServiceRequest, "/api/service_request/<int:request_id>/reject")
-    api.add_resource(CompleteServiceRequest, "/api/service_request/<int:request_id>/complete")
-
+    # api.add_resource(ServiceRequestAction, "/api/service_requests/<int:request_id>/action")
+    
+    
     # Register Blueprints
     from backend.controllers import main_blueprint
     app.register_blueprint(main_blueprint)

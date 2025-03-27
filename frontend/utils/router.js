@@ -2,14 +2,29 @@ import Navbar from "../components/Navbar.js";
 import store from "../utils/store.js";
 
 // Home Page
+
 const Home = {
   template: `
-    <div class="container mt-4">
-      <h1>Welcome to the Household Services Application V2</h1>
-      <p>This is the homepage.</p>
+    <div class="container mt-5 d-flex flex-column align-items-center text-center">
+      <div class="p-5 bg-light rounded shadow-lg">
+        <h1 class="fw-bold text-primary">Welcome to Household Services V2</h1>
+        <p class="text-muted fs-5">
+          Your one-stop solution for all household services, from cleaning to electrical repairs.
+        </p>
+
+        <div class="mt-4">
+          <router-link to="/login" class="btn btn-primary me-3 px-4 py-2">
+            <i class="bi bi-box-arrow-in-right"></i> Login
+          </router-link>
+          <router-link to="/register" class="btn btn-outline-primary px-4 py-2">
+            <i class="bi bi-person-plus"></i> Register
+          </router-link>
+        </div>
+      </div>
     </div>
   `,
 };
+
 
 // Lazy-load Vue components for performance
 const LoginPage = () => import("../pages/LoginPage.js");
@@ -51,9 +66,7 @@ const routes = [
   { path: "/login", component: LoginPage },
   { path: "/register", component: RegisterPage },
 
-  // // Unified Dashboard (redirects to role-specific dashboard)
-  // { path: "/dashboard", component: DashboardPage, meta: { requiresAuth: true } },
-
+  
   // Admin Routes
   { path: "/admin-dashboard", component: AdminDashboard, meta: { requiresAuth: true, role: "admin" } },
   { path: "/admin-users", component: AdminUsers, meta: { requiresAuth: true, role: "admin" } },
@@ -80,19 +93,7 @@ const router = new VueRouter({
   routes
 });
 
-// 🔐 Navigation Guard for Authentication & Role-Based Access
-// router.beforeEach((to, from, next) => {
-//   const isAuthenticated = store.getters.isAuthenticated;
-//   const userRole = store.getters.userRole;
-
-//   if (to.meta.requiresAuth && !isAuthenticated) {
-//     next("/login");  // Redirect to login if not authenticated
-//   } else if (to.meta.role && to.meta.role !== userRole) {
-//     next("/dashboard");  // Redirect unauthorized users to their dashboard
-//   } else {
-//     next();  // Proceed to route
-//   }
-// });
+// Navigation Guard
 router.beforeEach((to, from, next) => {
   const isAuthenticated = store.getters.isAuthenticated;
   const userRole = store.getters.userRole;
