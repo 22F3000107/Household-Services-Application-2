@@ -2,7 +2,7 @@ from flask import request
 from flask_jwt_extended import jwt_required as auth_required, current_user
 from flask_restful import Resource
 from werkzeug.security import generate_password_hash
-from backend.models import db, User, Service, ServiceRequest, ServiceProfessional, Review, JobLog, Customer
+from backend.models import db, User, Service, ServiceRequest, ServiceProfessional, Review, Customer
 
 # Register API
 class Register(Resource):
@@ -247,6 +247,7 @@ class ServiceRequestList(Resource):
             "service_id": req.service_id,
             "customer_id": req.customer_id,
             "professional_id": req.professional_id,
+            "address": req.customer.address if req.customer else "N/A",
             "date_of_request": req.date_of_request.strftime("%Y-%m-%d"),
             "date_of_completion": req.date_of_completion.strftime("%Y-%m-%d") if req.date_of_completion else None,
             "status": req.status,
@@ -413,75 +414,6 @@ class ReviewResource(Resource):
         return {"message": "Review deleted successfully"}, 200
 
 
-class JobLogList(Resource):
-    def get(self):
-        """Get all job logs"""
-        job_logs = JobLog.query.all()
-        return [{
-            "id": log.id,
-            "job_name": log.job_name,
-            "status": log.status,
-            "details": log.details,
-            "created_at": log.created_at,
-            "updated_at": log.updated_at
-        } for log in job_logs], 200
-
-    def post(self):
-        """Create a new job log"""
-        data = request.get_json()
-        if not data.get("job_name") or not data.get("status"):
-            return {"error": "Job name and status are required"}, 400
-
-        new_log = JobLog(
-            job_name=data["job_name"],
-            status=data["status"],
-            details=data.get("details", "")
-        )
-
-        db.session.add(new_log)
-        db.session.commit()
-        return {"message": "Job log added successfully"}, 201
-
-
-class JobLogResource(Resource):
-    def get(self, job_id):
-        """Get details of a specific job log"""
-        log = JobLog.query.get(job_id)
-        if not log:
-            return {"error": "Job log not found"}, 404
-
-        return {
-            "id": log.id,
-            "job_name": log.job_name,
-            "status": log.status,
-            "details": log.details,
-            "created_at": log.created_at,
-            "updated_at": log.updated_at
-        }, 200
-
-    def put(self, job_id):
-        """Update a job log"""
-        data = request.get_json()
-        log = JobLog.query.get(job_id)
-        if not log:
-            return {"error": "Job log not found"}, 404
-
-        log.job_name = data.get("job_name", log.job_name)
-        log.status = data.get("status", log.status)
-        log.details = data.get("details", log.details)
-
-        db.session.commit()
-        return {"message": "Job log updated successfully"}, 200
-
-    def delete(self, job_id):
-        """Delete a job log"""
-        log = JobLog.query.get(job_id)
-        if not log:
-            return {"error": "Job log not found"}, 404
-
-        db.session.delete(log)
-        db.session.commit()
-        return {"message": "Job log deleted successfully"}, 200
 
 class AcceptServiceRequest(Resource):
     @auth_required("token")

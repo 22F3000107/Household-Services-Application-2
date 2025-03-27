@@ -1,4 +1,4 @@
-from flask import flash, render_template, request, redirect, session, url_for, send_from_directory, jsonify, Blueprint, current_app
+from flask import flash, render_template, request, redirect, session, url_for, send_from_directory, jsonify, Blueprint, current_app, send_file
 from backend.models import db, User, Customer, Service, ServiceRequest, ServiceProfessional, Review
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
@@ -7,6 +7,11 @@ from werkzeug.utils import secure_filename
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 import os
 from sqlalchemy import func
+from backend.tasks import send_daily_reminder, send_monthly_activity_report, export_closed_requests_csv
+import csv
+import io
+from backend.cache import get_cached_services, clear_service_cache
+
 
 # Create a Blueprint instance
 main_blueprint = Blueprint('main', __name__)
@@ -118,9 +123,22 @@ def register():
         db.session.add(new_user)
         db.session.commit()
         
-        if role == 'service_professional':
-            service_type = data.get('service_type')
-            experience = int(data.get('experience'))
+
+
+        if role == 'customer':
+            address = data.get('address', '').strip()
+            pincode = data.get('pincode', '').strip()
+
+            if not address or not pincode:
+                return jsonify({'error': 'Address and pincode are required for customers'}), 400
+            
+            new_customer = Customer(user_id=new_user.id, address=address, pincode=pincode)
+            db.session.add(new_customer)
+            db.session.commit()
+
+        elif role == 'service_professional':
+            service_type = data.get('service_type', '').strip()
+            experience = data.get('experience', 0)
 
             
             if not service_type or experience is None:
@@ -435,11 +453,13 @@ def get_unassigned_requests():
     for request in unassigned_requests:
         customer = Customer.query.get(request.customer_id)
         customer_name = customer.user.username if customer and customer.user else "Unknown"
+        customer_address = customer.address if customer else "Unknown"
 
         requests_data.append({
             "id": request.id,
             "service_name": request.service.name,
             "customer_name": customer_name,
+            "customer_address": customer_address if customer else "Unknown",
             "status": request.status
         })
 
@@ -596,6 +616,7 @@ def get_professional_service_requests():
     service_requests = ServiceRequest.query.filter(
         (ServiceRequest.professional_id == professional.id) | (ServiceRequest.status == "requested")
     ).all()
+    
     print(f"Professional ID: {professional.id}")  
     print(f"Total Jobs (Requested & Assigned): {len(service_requests)}")
 
@@ -603,7 +624,8 @@ def get_professional_service_requests():
         {
             "id": req.id,
             "service_name": req.service.name,  
-            "customer_name": req.customer.user.username if req.customer else "Unknown",  
+            "customer_name": req.customer.user.username if req.customer else "Unknown", 
+            "customer_address": req.customer.address if req.customer else "Unknown",
             "status": req.status,
             "date_of_request": req.date_of_request.strftime('%Y-%m-%d') if req.date_of_request else None,
             "professional_id": req.professional_id
@@ -818,3 +840,72 @@ def get_customer_reviews():
     except Exception as e:
         print(f"Error in get_customer_reviews: {str(e)}")  # Log exact error
         return jsonify({"error": str(e)}), 500
+
+
+# ---------------- CELERY TASK MANAGEMENT ----------------
+
+# 📅 **Trigger Daily Reminder**
+@main_blueprint.route("/api/task/daily-reminder", methods=["POST"])
+def trigger_daily_reminder():
+    result = send_daily_reminder.delay()
+    return jsonify({"task_id": result.id, "status": "Daily reminders initiated"}), 202
+
+# 📊 **Trigger Monthly Activity Report**
+@main_blueprint.route("/api/task/monthly-report", methods=["POST"])
+def trigger_monthly_report():
+    result = send_monthly_activity_report.delay()
+    return jsonify({"task_id": result.id, "status": "Monthly report generation started"}), 202
+
+# 📂 **Export Closed Requests as CSV**
+@main_blueprint.route("/api/task/export-closed-requests", methods=["POST"])
+@jwt_required() 
+def trigger_csv_export():
+    data = request.get_json()
+    admin_email = data.get("admin_email")
+
+    if not admin_email:
+        return jsonify({"error": "Admin email is required"}), 400
+
+    result = export_closed_requests_csv.delay(admin_email)
+    return jsonify({"task_id": result.id, "status": "CSV export started"}), 202
+
+
+@main_blueprint.route("/api/admin/export_closed_requests", methods=["GET"])
+@jwt_required()
+def export_closed_requests():
+    try:
+        # Query closed service requests
+        closed_requests = ServiceRequest.query.filter_by(status="Closed").all()
+
+        # Prepare CSV file
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Request ID", "Service", "Customer ID", "Professional ID", "Date of Completion", "Remarks"])
+        for req in closed_requests:
+            writer.writerow([req.id, req.service_id, req.customer_id, req.professional_id, req.date_of_completion, req.remarks])
+
+        output.seek(0)
+
+        return send_file(io.BytesIO(output.getvalue().encode()), mimetype="text/csv", as_attachment=True, download_name="closed_requests.csv")
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+
+# ---------------- CACHE MANAGEMENT ----------------
+
+@main_blueprint.route("/services/cached", methods=["GET"])
+def get_cached_services_route():
+    return jsonify(get_cached_services())
+
+@main_blueprint.route("/service/update/<int:service_id>", methods=["POST"])
+def update_service_details(service_id):
+    service = Service.query.get(service_id)
+    if not service:
+        return jsonify({"error": "Service not found"}), 404
+
+    service.name = request.json.get("name", service.name)
+    db.session.commit()
+
+    clear_service_cache()  # Call cache invalidation function
+    return jsonify({"message": "Service updated successfully"})

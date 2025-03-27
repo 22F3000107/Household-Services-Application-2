@@ -15,6 +15,7 @@ export default {
                     <th>ID</th>
                     <th>Service Name</th>
                     <th>Customer Name</th>
+                    <th>Address</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
@@ -24,6 +25,7 @@ export default {
                     <td>{{ job.id }}</td>
                     <td>{{ job.service_name }}</td>
                     <td>{{ job.customer_name || "Unknown" }}</td>
+                    <td>{{ job.customer_address || "Unknown" }}</td>
                     <td>{{ job.status }}</td>
                     <td>
                         <!-- Accept & Reject for 'requested' services -->

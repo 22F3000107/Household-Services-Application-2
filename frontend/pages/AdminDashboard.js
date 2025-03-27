@@ -49,6 +49,11 @@ export default {
 
         <hr>
 
+        <h3>Admin Actions</h3>
+        <button @click="exportClosedRequests" class="btn btn-warning">Export Closed Requests</button>
+        
+        <hr>
+
         <h3>Search Professionals</h3>
         <input v-model="searchQuery" placeholder="Search professionals..." class="form-control">
         <button @click="searchProfessionals" class="btn btn-primary mt-2">Search</button>
@@ -111,6 +116,7 @@ export default {
                     <th>Request ID</th>
                     <th>Service</th>
                     <th>Customer Name</th>
+                    <th>Address</th>
                     <th>Status</th>
                     <th>Assign to Professional</th>
                 </tr>
@@ -120,6 +126,7 @@ export default {
                     <td>{{ request.id }}</td>
                     <td>{{ request.service_name }}</td>
                     <td>{{ request.customer_name }}</td>
+                    <td>{{ request.customer_address }}</td>
                     <td>{{ request.status }}</td>
                     <td>
                         <select v-model="selectedProfessional[request.id]" class="form-control">
@@ -171,6 +178,28 @@ export default {
                 this.errorReviews = error.message;
             } finally {
                 this.loadingReviews = false;
+            }
+        },
+
+        async exportClosedRequests() {
+            try {
+                const response = await fetch("/api/admin/export_closed_requests", {
+                    method: "GET",
+                    headers: { "Authorization": `Bearer ${store.state.token}` }
+                });
+                
+                if (!response.ok) throw new Error("Failed to export requests");
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.setAttribute("download", "closed_requests.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (error) {
+                alert(error.message);
             }
         },
 
@@ -306,6 +335,8 @@ export default {
 
         async assignJob(requestId) {
             let professionalId = this.selectedProfessional[requestId];
+            console.log("Assigning Request ID:", requestId, "to Professional ID:", professionalId);
+
             if (!professionalId) {
                 alert("Please select a professional.");
                 return;
@@ -326,7 +357,7 @@ export default {
                 alert("Service request assigned successfully!");
                 this.fetchUnassignedRequests();
             } catch (error) {
-                alert(error.message);
+                console.error("Error assigning service request:", error);
             }
         }
     },

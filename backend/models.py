@@ -88,24 +88,3 @@ class Review(db.Model):
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
 
-# Scheduled Job Logs
-class JobLog(db.Model):
-    __tablename__ = 'job_logs'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    job_name = db.Column(db.String(100), nullable=False)  # e.g., 'Daily Reminder', 'Monthly Report'
-    status = db.Column(db.String(20), default='Pending')  # Pending, Completed, Failed
-    details = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
-    updated_at = db.Column(db.DateTime, onupdate=db.func.current_timestamp())
-
-# with app.app_context():
-#     db.create_all()
-
-# #if admin exists, else create admin
-#     admin = User.query.filter_by(is_admin=True).first()
-#     if not admin:
-#        hashed_password = generate_password_hash('admin')
-#        admin = User(username='admin',password=hashed_password,role='admin',email='Admin123@gmail.com',is_admin=True)
-#        db.session.add(admin)
-#        db.session.commit()
