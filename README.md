@@ -77,11 +77,6 @@ celery -A [FILL: module] worker --loglevel=info
 celery -A [FILL: module] beat --loglevel=info
 ```
 
-### Default admin login
-[FILL: admin credentials if seeded on first run, or delete this section]
-
-## Performance
-[FILL: one or two lines on how the 35% reduction in average service response time was measured, covering the before and after and what you changed (e.g. query changes, indexes). If you can't explain it, remove the claim from your resume.]
 
 ## Future Enhancements
 - Email/SMS notifications
