@@ -1,6 +1,6 @@
 # Household Services Application
 
-A multi-user web application for booking and managing household services such as electrician, cleaning, and AC repair. It has role-based access for Admins, Customers, and Service Professionals.
+A multi-user web application for booking and managing household services such as electrician, cleaning, and AC repair. It supports role-based access for Admins, Customers, and Service Professionals.
 
 ## Features
 
@@ -28,16 +28,16 @@ A multi-user web application for booking and managing household services such as
 |---|---|
 | Backend | Python, Flask, SQLAlchemy |
 | Database | SQLite |
-| Frontend | Vue.js, Bootstrap, Chart.js |
+| Frontend | Vue.js, Bootstrap, Chart.js (served by Flask, no build step) |
+| Authentication | JWT (Flask-JWT-Extended) |
 | Background jobs | Celery, Redis |
-| Authentication | [FILL: Flask-Login or JWT, whichever the code uses] |
 
 ## Project Structure
 
 ```
-├── app.py              # Flask entry point
-├── backend/            # [FILL: models, routes, Celery tasks]
-├── frontend/           # Vue.js app
+├── app.py              # Entry point (creates tables and default admin)
+├── backend/            # Flask app, models, routes, Celery setup
+├── frontend/           # Vue.js components, pages, router, store
 ├── instance/           # SQLite database
 ├── requirements.txt
 └── .env.example        # Environment variable template
@@ -47,35 +47,36 @@ A multi-user web application for booking and managing household services such as
 
 ### Prerequisites
 - Python 3.x
-- Node.js and npm
-- Redis (only needed for Celery background jobs)
+- Redis (only for Celery background jobs)
 
-### Setup
+### Run locally
 
 ```bash
 git clone https://github.com/22F3000107/Household-Services-Application-2.git
 cd Household-Services-Application-2
 
-# Backend
 python3 -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env            # then fill in your own values
-python app.py                   # [FILL: confirm the run command]
-
-# Frontend (new terminal)
-cd frontend
-npm install
-npm run serve                   # [FILL: confirm the script name]
+python app.py
 ```
+
+Open http://127.0.0.1:5000 in your browser. Database tables and a default admin account are created automatically on first run.
 
 ### Background jobs (optional)
 
 ```bash
 redis-server
-celery -A [FILL: module] worker --loglevel=info
-celery -A [FILL: module] beat --loglevel=info
+celery -A app.celery worker --loglevel=info
+celery -A app.celery beat --loglevel=info
 ```
+
+### Default admin login (development only)
+- Username: `admin`
+- Password: `admin`
+
+Change this password before deploying anywhere public.
 
 
 ## Future Enhancements
