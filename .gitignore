@@ -25,4 +25,8 @@ dist-ssr
 
 .venv
 .env
-__pycache__
+__pycache__.env
+.DS_Store
+celerybeat-schedule
+__pycache__/
+*.pyc
